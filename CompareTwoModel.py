@@ -80,7 +80,7 @@ class CompareTwoModel(object):
         for bin_level in new_model_bins:
             marix_dict[bin_level] = round(df_sub[df_sub["new_model_bins"] == bin_level].shape[0] * 1.0 / df_sub.shape[0], 4)
         return pd.DataFrame.from_dict(marix_dict, orient='index').T
-        # 如果一个字典中，key只有一个（不是key的个数有1个），那么在使用pd.DataFrame.from_dict(marix_dict, orient='columns')value时就会报错，解决方式就是上面return后面的方式实现
+        # 如果一个字典中，key的值只有一个（不是key的个数有1个），那么在使用pd.DataFrame.from_dict(marix_dict, orient='columns')value时就会报错，解决方式就是上面return后面的方式实现
 
 
 if __name__ == '__main__':
