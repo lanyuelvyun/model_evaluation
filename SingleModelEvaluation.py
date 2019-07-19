@@ -167,9 +167,7 @@ class BinsAnalysis(object):
 
 
 if __name__ == "__main__":
-    path = r"C:\Users\V-DZ-00255\Downloads"
-
-    # 统计数据：
+    path = r"C:\Users\Downloads"
     df = pd.read_csv(path + r"\quyong_zxdae_dt0716.csv", na_values=[-1, -2, -3, -99])
     save_path = path + r"\quyong_zxdae_dt0716_result.csv"
     split_col = 'aka_qy_y_zx_score'  # 模型分，用于分层
