@@ -2,9 +2,6 @@
 import pandas as pd
 import numpy as np
 from sklearn import metrics
-import datetime
-import time
-
 
 class BinsAnalysis(object):
     def __init__(self, df, split_col, split_value_list, target_list, save_path):
@@ -100,31 +97,31 @@ class BinsAnalysis(object):
 
     def _calc_auc(self, target, df_loan_sub):
         """
-		计算AUC，必须以loan_id为维度，因为在建模的时候就是以loan_id为维度。
+        计算AUC，必须以loan_id为维度，因为在建模的时候就是以loan_id为维度
         需要：模型分+label
-		1、建模的时候，label的定义：坏用户label=1, 好用户label=0
-        2、注意计算AUC的时候，函数metrics.roc_auc_score(label_list, pvalue_list)的label与pvalue必须是这样的对应关系：pvalue越高，用户越坏(label=1)，否则计算的AUC就不对		        
-		3、但是我们现在有的模型分：取值范围在[300， 700]之间，分数越高，用户越好(label=0)，那怎么计算AUC呢？
-		4、解决办法：将label颠倒过来，好用户label=1, 坏用户label=0。将这个label_list和模型分输入到函数metrics.roc_auc_score()里面，就可以了。
+        1、建模的时候，label的定义：坏用户label=1, 好用户label=0
+        2、注意计算AUC的时候，函数metrics.roc_auc_score(label_list, pvalue_list)的label与pvalue必须是这样的对应关系：pvalue越高，用户越坏(label=1)，否则计算的AUC就不对
+        3、但是我们现在有的模型分：取值范围在[300， 700]之间，分数越高，用户越好(label=0)，那怎么计算AUC呢？
+        4、解决办法：将label颠倒过来，好用户label=1, 坏用户label=0。将这个label_list和模型分输入到函数metrics.roc_auc_score()里面，就可以了。
         """
         print("注意,计算AUC的时候，必须以loan_id为维度。并且label与pvalue必须是正相关的！否则计算的AUC就不对")
         df_loan_sub_copy = df_loan_sub.copy()
         # 去掉空值
         df_loan_sub_copy = df_loan_sub_copy[df_loan_sub_copy[self.split_col].notnull()]  # 模型分可能有NULL
         df_loan_sub_copy = df_loan_sub_copy[df_loan_sub_copy[self.split_col] >= 0]  # NULL值可能填充成-1，-2，-3
-		# label：由于模型分数越高，用户越好，所以label这样定义
+        # label：由于模型分数越高，用户越好，所以label这样定义
         df_loan_sub_copy["label"] = df_loan_sub_copy["max_overdue"].apply(lambda x: 1 if x <= target else 0)
-        auc = metrics.roc_auc_score(df_loan_sub_copy["label"], df_loan_sub_copy[self.split_col]) 
+        auc = metrics.roc_auc_score(df_loan_sub_copy["label"], df_loan_sub_copy[self.split_col])
         print("AUC = ", auc)
         return auc
 
     def _calc_ks(self, target, df_loan_sub):
         """
-        计算ks的时候，必须以loan_id为维度，因为在建模的时候就是以loan_id为维度。
+        计算ks的时候，必须以loan_id为维度，因为在建模的时候就是以loan_id为维度
         需要：模型分+label
-        2、以下计算KS的逻辑适用于：模型分数范围是[300, 700]，分数越高，用户越好(label=0)
-		3、label的定义：与模型训练时候一致，坏用户label=1, 好用户label=0
-		"""
+        1、以下计算KS的逻辑适用于：模型分数范围是[300, 700]，分数越高，用户越好(label=0)
+        2、label的定义：与模型训练时候一致，坏用户label=1, 好用户label=0
+        """
         print("计算ks，以下计算KS的逻辑适用于：模型分数范围是[300, 700]，分数越高，用户越好(label=0)")
         # 去掉空值，NULL值可能填充成-1，-2，-3
         df_loan_sub_copy = df_loan_sub.copy()
@@ -170,16 +167,16 @@ class BinsAnalysis(object):
 
 
 if __name__ == "__main__":
-    path = r"C:\Users\Downloads"
+    path = r"C:\Users\V-DZ-00255\Downloads"
 
     # 统计数据：
-    df = pd.read_csv(path + r"\quyong_zxdae_dt0716.csv", nan_values=[-1, -2, -3, -99])
+    df = pd.read_csv(path + r"\quyong_zxdae_dt0716.csv", na_values=[-1, -2, -3, -99])
     save_path = path + r"\quyong_zxdae_dt0716_result.csv"
-    split_col = 'aka_qy_y_zx_score'　　# 模型分，用于分层
+    split_col = 'aka_qy_y_zx_score'  # 模型分，用于分层
     print(df[split_col].min(), df[split_col].max())
     split_value_list = [0, 455, 470, 490, 505, 520, 540, 999]  # 自定义的分层区间，按照这个区间进行分层。注意：左闭右开
 
     # 计算各分层的金额逾期率，单数逾期率，样本分布
-    target_list = [0, 3, 7]　＃　分别计算Ｄ０、Ｄ３、Ｄ７逾期率
+    target_list = [0, 3, 7]  # 分别计算Ｄ０、Ｄ３、Ｄ７逾期率
     binsanalysis = BinsAnalysis(df=df, split_col=split_col,
                                 split_value_list=split_value_list, target_list=target_list, save_path=save_path)
