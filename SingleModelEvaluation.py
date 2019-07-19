@@ -84,7 +84,7 @@ class BinsAnalysis(object):
         df_repay = pd.merge(self.df, df_max, left_on="loan_id", right_index=True, how="left")
         df_loan = df_repay.drop_duplicates(subset="loan_id", keep="first")  # 将loan_id去重
         print("df_loan.shape ", df_loan.shape)
-        # df_loan.to_csv(r"E:\work\2 mission\3 Parsing_online_logs\calculate_auc_online\analysis_result\zxdae_acard\dt0512\zxdae_acardscore_v2_dt0512_loan.csv", index=None)
+        # df_loan.to_csv(r"result\loan.csv", index=None)
         return df_loan
 
     def _get_bins(self):
