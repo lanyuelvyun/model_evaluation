@@ -1,7 +1,7 @@
 # model_evaluation
 信用模型评估方法
 
-1、单个模型自身的评估
+1、单个模型自身的评估 SingleModelEvaluation.py
 
 从业务角度出发，计算各个分层内的金额/笔数逾期率和人数占比
 
