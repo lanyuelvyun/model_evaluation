@@ -1,7 +1,7 @@
 # -*- coding:utf-8 -*-
 """
-@author: lisiqi
-@time: 2019/7/19 11:30
+@author: lanyue
+@time: 2019/08/09 16:25
 @目的：比较新老模型分的效果
 """
 import pandas as pd
