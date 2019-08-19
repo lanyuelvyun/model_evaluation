@@ -152,11 +152,11 @@ class CompareTwoModel(object):
         plt.tick_params(labelsize=8)  # tick_params可设置坐标轴刻度值属性
         color_list = ["blue", "red", "yellow", "green", "orange", "black"]
         for i, score_name in enumerate(self.score_info_dict.keys()):
-            ks, ks_thred, cut_list, tpr_list, fpr_list = self._calc_ks(df_copy[score_name], df_copy["label"])
+            ks, ks_cut_pvalue, cut_list, tpr_list, fpr_list = self._calc_ks(df_copy[score_name], df_copy["label"])
             # plot
             plt.plot(cut_list, tpr_list, label='tpr_%s,ks = %s' % (score_name, ks), color=color_list[i], linestyle='-')
             plt.plot(cut_list, fpr_list, label='fpr_%s' % score_name, color=color_list[i], linestyle='-')
-            plt.plot([ks_thred, ks_thred], [0, 1], label='ks_thred_%s' % score_name, color=color_list[i], linestyle='--')
+            plt.plot([ks_cut_pvalue, ks_cut_pvalue], [0, 1], label='ks_cut_pvalue_%s' % score_name, color=color_list[i], linestyle='--')
         plt.plot([400, 600], [0, 1], color='black', linestyle='--')
         # plt.xticks(x_list, color='black', rotation=60)  # 横坐标旋转60度
         plt.title('ks_curve')
@@ -166,50 +166,65 @@ class CompareTwoModel(object):
         path = os.path.join(self.save_path, 'ks_curve.png')
         plt.savefig(path)
         plt.close()
-        # return ks_old, ks_new
 
     @staticmethod
     def _calc_ks(p_list, label_list):
         """
         计算ks的时候，必须以建模时候的最小粒度样本来进行计算
         需要：模型分+label
-        1、以下计算KS的逻辑适用于：模型分数范围是[300, 700]，分数越高，用户越好(label=0)
-        2、label的定义：与模型训练时候一致，坏用户label=1, 好用户label=0
+        label的定义：与模型训练时候一致，坏用户label=1, 好用户label=0
         """
-        print("计算ks，以下计算KS的逻辑适用于：模型分数范围是[300, 700]，分数越高，用户越好(label=0)")
-        tuple_list = list(zip(p_list, label_list))
-        unique_value = sorted(np.unique(p_list))
-        cut_list = np.arange(300, 700, 1)
-        if len(unique_value) < len(cut_list):
-            cut_list = unique_value
-        ks_thred = 0
-        max_dist = 0
-        init_value = 0.00001
-        tpr_list = []
-        fpr_list = []
-        for cut in cut_list:
-            tp = init_value
-            fn = init_value
-            fp = init_value
-            tn = init_value
-            for score, label in tuple_list:
-                if score <= cut and label == 1:
-                    tp += 1
-                elif score <= cut and label == 0:
-                    fp += 1
-                elif score > cut and label == 1:
-                    fn += 1
-                elif score > cut and label == 0:
-                    tn += 1
-            tpr = round(1.0 * tp / (tp + fn), 3)
-            fpr = round(1.0 * fp / (fp + tn), 3)
-            dist = tpr - fpr
-            if dist > max_dist:
-                max_dist = dist  # max(tpr-fpr)，就是KS
-                ks_thred = cut  # 取到max(tpr-fpr)时候的阈值p
-            tpr_list.append(tpr)
-            fpr_list.append(fpr)
-        return round(max_dist, 5), ks_thred, cut_list, tpr_list, fpr_list
+        print("按照pvalue从小到大排序，该排序方式计算的KS适用于：模型分数pvalue范围是[300, 700]，分数越低，用户越坏(label=1)，预测的时候,<=pvalue的样本，被预测成label=1")
+        df_result = pd.DataFrame({"pvalue": p_list, "label": label_list}).sort_values(by="pvalue", ascending=True).reset_index()  
+        # print("按照pvalue从大到小排序，该排序方式计算的KS适用于：模型分数pvalue范围是[0,1]，分数越高，用户越坏(label=1)，预测的时候,>=pvalue的样本，被预测成label=1")
+        # df_result = pd.DataFrame({"pvalue": p_list, "label": label_list}).sort_values(by="pvalue", ascending=False).reset_index()  
+        df_result["label_cumsum"] = df_result["label"].cumsum(axis=0)
+        df_result["label_cumsum_cnt"] = np.arange(1, df_result.shape[0]+1)
+        total_p = df_result["label"].sum()
+        total_n = df_result.shape[0] - total_p
+        df_result["tpr"] = df_result["label_cumsum"] * 1.0 / total_p
+        df_result["fpr"] = (df_result["label_cumsum_cnt"] - df_result["label_cumsum"]) * 1.0 / total_n
+        df_result["dist"] = df_result["tpr"] - df_result["fpr"]
+        ks_cut_pvalue, ks = df_result.iloc[df_result["dist"].idxmax()][["pvalue", "dist"]]  # 找到max(tpr-fpr)=ks和对应的pvalue
+        print("ks= %s, ks_cut_pvalue = %s" % (round(ks, 3), ks_cut_pvalue))
+        return round(ks, 3), ks_cut_pvalue, df_result["pvalue"], df_result["tpr"], df_result["fpr"]
+        # 这个计算tpr和fpr方法有一个缺点，KS曲线是以df_result["pvalue"]为横轴的来画的，但是df_result["pvalue"]的值有重复，所以画出来的ＫＳ曲线不平滑
+        
+#         方法二
+#         print("计算ks，以下计算KS的逻辑适用于：模型分数范围是[300, 700]，分数越高，用户越好(label=0)")
+#         tuple_list = list(zip(p_list, label_list))
+#         unique_value = sorted(np.unique(p_list))
+#         cut_list = np.arange(300, 700, 1)
+#         if len(unique_value) < len(cut_list):
+#             cut_list = unique_value
+#         ks_thred = 0
+#         max_dist = 0
+#         init_value = 0.00001
+#         tpr_list = []
+#         fpr_list = []
+#         for cut in cut_list:
+#             tp = init_value
+#             fn = init_value
+#             fp = init_value
+#             tn = init_value
+#             for score, label in tuple_list:
+#                 if score <= cut and label == 1:
+#                     tp += 1
+#                 elif score <= cut and label == 0:
+#                     fp += 1
+#                 elif score > cut and label == 1:
+#                     fn += 1
+#                 elif score > cut and label == 0:
+#                     tn += 1
+#             tpr = round(1.0 * tp / (tp + fn), 3)
+#             fpr = round(1.0 * fp / (fp + tn), 3)
+#             dist = tpr - fpr
+#             if dist > max_dist:
+#                 max_dist = dist  # max(tpr-fpr)，就是KS
+#                 ks_thred = cut  # 取到max(tpr-fpr)时候的阈值p
+#             tpr_list.append(tpr)
+#             fpr_list.append(fpr)
+#         return round(max_dist, 5), ks_thred, cut_list, tpr_list, fpr_list
 
 if __name__ == '__main__':
     # 比较新老模型在同一批用户上的打分情况，构造偏移矩阵
@@ -235,7 +250,7 @@ if __name__ == '__main__':
     df = df.drop_duplicates(subset="loan_id", keep="first")  # 去重loan_id
     df['label'] = df["max_overdue"].apply(lambda x: 1 if x > 7 else 0)
     print(df.shape)
-    # 新老模型分，以及各自对应的分层区间。注意老模型分必须叫做“old_score”!!
+    # 新老模型分，以及各自对应的分层区间。注意老模型分必须叫做“old_score”!!！
     df = df.rename(columns={"aka_y_zx_score_v2": "old_score"})
     score_info_dict = {"old_score": [0, 439, 459, 479, 499, 520, 999],
                        "v2_score_new_20%": [0, 439, 459, 479, 499, 520, 999],
