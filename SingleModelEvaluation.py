@@ -21,7 +21,7 @@ class BinsAnalysis(object):
 
         print("初始化开始".center(80, '*'))
         self._get_bins()  # 先分好层
-        self._df_loan = self._get_loan_df()  # 根据账期维度得到订单维度
+        self._df_loan = self.df.drop_duplicates(subset="loan_id", keep="first")  # 根据账期维度得到订单维度:将loan_id去重
         print("初始化完成".center(80, '*'))
         self.get_bins_overdue_rate()
 
@@ -35,19 +35,21 @@ class BinsAnalysis(object):
             df_loan_sub = self._df_loan
             print("df_loan_sub.shape ", df_loan_sub.shape)
 
-            print("calc AUC".center(20, '_'))
-            auc = self._calc_auc(target, df_loan_sub)
-
-            print("calc KS".center(20, '_'))
-            ks, cut_list, tpr_list, fpr_list = self._calc_ks(target, df_loan_sub)
-
-            print("计算每一层内的金额逾期率、笔数逾期率、笔数占比".center(20, '_'))
+            # 定义一个df_result，用于存放结果
             index_list = df_repay_sub.groupby("bins").count().index
             columns_list = ["target", "loan_KS", "loan_AUC",
                             "repay_total_amt", "repay_due_amt", "repay_dueamt_rate",
                             "repay_total_cnt", "repay_due_cnt", "repay_duecnt_rate", "repay_cnt_distribution",
                             "loan_total_cnt", "loan_due_cnt", "loan_duecnt_rate", "loan_cnt_distribution"]
             df_result = pd.DataFrame(columns=columns_list, index=index_list)
+
+            print("calc AUC".center(20, '_'))
+            auc = self._calc_auc(target, df_loan_sub)
+
+            print("calc KS".center(20, '_'))
+            ks, ks_cut_pvalue, cut_list, tpr_list, fpr_list = self._calc_ks(target, df_loan_sub)
+
+            print("计算每一层内的金额逾期率、笔数逾期率、笔数占比".center(20, '_'))
             # 账期维度：每个分层内，金额逾期率
             result = df_repay_sub.groupby("bins").apply(lambda x: (x["due_amount"].sum(), x[x["overdue_day"] > target]["due_amount"].sum()))
             df_result["repay_total_amt"] = result.map(lambda x: x[0])
@@ -82,9 +84,10 @@ class BinsAnalysis(object):
         df_max = self.df.groupby("loan_id").max()[["user_id", "overdue_day"]]
         df_max.rename(columns={"overdue_day": "max_overdue"}, inplace=True)
         df_repay = pd.merge(self.df, df_max, left_on="loan_id", right_index=True, how="left")
+        print("99")
         df_loan = df_repay.drop_duplicates(subset="loan_id", keep="first")  # 将loan_id去重
         print("df_loan.shape ", df_loan.shape)
-        # df_loan.to_csv(r"result\loan.csv", index=None)
+        # df_loan.to_csv(r"E:\work\2 mission\3 Parsing_online_logs\calculate_auc_online\analysis_result\zxdae_acard\dt0512\zxdae_acardscore_v2_dt0512_loan.csv", index=None)
         return df_loan
 
     def _get_bins(self):
@@ -109,6 +112,7 @@ class BinsAnalysis(object):
         # 去掉空值
         df_loan_sub_copy = df_loan_sub_copy[df_loan_sub_copy[self.split_col].notnull()]  # 模型分可能有NULL
         df_loan_sub_copy = df_loan_sub_copy[df_loan_sub_copy[self.split_col] >= 0]  # NULL值可能填充成-1，-2，-3
+        df_loan_sub_copy = df_loan_sub_copy.drop_duplicates(subset="loan_id", keep="first")  # 将loan_id去重
         # label：由于模型分数越高，用户越好，所以label这样定义
         df_loan_sub_copy["label"] = df_loan_sub_copy["max_overdue"].apply(lambda x: 1 if x <= target else 0)
         auc = metrics.roc_auc_score(df_loan_sub_copy["label"], df_loan_sub_copy[self.split_col])
@@ -117,53 +121,32 @@ class BinsAnalysis(object):
 
     def _calc_ks(self, target, df_loan_sub):
         """
-        计算ks的时候，必须以loan_id为维度，因为在建模的时候就是以loan_id为维度
+        计算ks的时候，必须以建模时候的最小粒度样本来进行计算
         需要：模型分+label
-        1、以下计算KS的逻辑适用于：模型分数范围是[300, 700]，分数越高，用户越好(label=0)
-        2、label的定义：与模型训练时候一致，坏用户label=1, 好用户label=0
+        label的定义：与模型训练时候一致，坏用户label=1, 好用户label=0
         """
-        print("计算ks，以下计算KS的逻辑适用于：模型分数范围是[300, 700]，分数越高，用户越好(label=0)")
         # 去掉空值，NULL值可能填充成-1，-2，-3
         df_loan_sub_copy = df_loan_sub.copy()
         df_loan_sub_copy = df_loan_sub_copy[(df_loan_sub_copy[self.split_col].notnull()) & (df_loan_sub_copy[self.split_col] >= 0)]
         df_loan_sub_copy["label"] = df_loan_sub_copy["max_overdue"].apply(lambda x: 1 if x > target else 0)
-
         p_list = df_loan_sub_copy[self.split_col]
         label_list = df_loan_sub_copy["label"]
-        tuple_list = list(zip(p_list, label_list))
-        unique_value = sorted(np.unique(p_list))
-        # cut_list = np.arange(0, 1, 0.002)
-        cut_list = np.arange(300, 700, 1)
-        if len(unique_value) < len(cut_list):
-            cut_list = unique_value
-        ks_thred = 0
-        max_dist = 0
-        init_value = 0.00001
-        tpr_list = []
-        fpr_list = []
-        for cut in cut_list:
-            tp = init_value
-            fn = init_value
-            fp = init_value
-            tn = init_value
-            for score, label in tuple_list:
-                if score <= cut and label == 1:
-                    tp += 1
-                elif score <= cut and label == 0:
-                    fp += 1
-                elif score > cut and label == 1:
-                    fn += 1
-                elif score > cut and label == 0:
-                    tn += 1
-            tpr = round(1.0 * tp / (tp + fn), 3)
-            fpr = round(1.0 * fp / (fp + tn), 3)
-            dist = tpr - fpr
-            if dist > max_dist:
-                max_dist = dist  # max(tpr-fpr)，就是KS
-                ks_thred = cut  # 取到max(tpr-fpr)时候的阈值p
-            tpr_list.append(tpr)
-            fpr_list.append(fpr)
-        return round(max_dist, 5), cut_list, tpr_list, fpr_list
+
+        print("按照pvalue从小到大排序，该排序方式计算的KS适用于：模型分数pvalue范围是[300, 700]，分数越低，用户越坏(label=1)，预测的时候,<=pvalue的样本，被预测成label=1")
+        df_result = pd.DataFrame({"pvalue": p_list, "label": label_list}).sort_values(by="pvalue", ascending=True).reset_index()
+        # print("按照pvalue从大到小排序，该排序方式计算的KS适用于：模型分数pvalue范围是[0,1]，分数越高，用户越坏(label=1)，预测的时候,>=pvalue的样本，被预测成label=1")
+        # df_result = pd.DataFrame({"pvalue": p_list, "label": label_list}).sort_values(by="pvalue", ascending=False).reset_index()
+        df_result["label_cumsum"] = df_result["label"].cumsum(axis=0)
+        df_result["label_cumsum_cnt"] = np.arange(1, df_result.shape[0] + 1)
+        total_p = df_result["label"].sum()
+        total_n = df_result.shape[0] - total_p
+        df_result["tpr"] = df_result["label_cumsum"] * 1.0 / total_p
+        df_result["fpr"] = (df_result["label_cumsum_cnt"] - df_result["label_cumsum"]) * 1.0 / total_n
+        df_result["dist"] = df_result["tpr"] - df_result["fpr"]
+        ks_cut_pvalue, ks = df_result.iloc[df_result["dist"].idxmax()][["pvalue", "dist"]]  # 找到max(tpr-fpr)=ks和对应的pvalue
+        print("ks= %s, ks_cut_pvalue = %s" % (round(ks, 3), ks_cut_pvalue))
+        return round(ks, 3), ks_cut_pvalue, df_result["pvalue"], df_result["tpr"], df_result["fpr"]
+        # 这个计算tpr和fpr方法有一个缺点，KS曲线是以df_result["pvalue"]为横轴的来画的，但是df_result["pvalue"]的值有重复，所以画出来的ＫＳ曲线不平滑
 
 
 if __name__ == "__main__":
