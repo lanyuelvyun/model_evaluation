@@ -1,7 +1,7 @@
 # -*- coding:utf-8 -*-
 """
 @author: lisiqi
-@time: 2019/7/19 11:30
+@time: 2019/8/27 18:10
 @目的：比较新老模型分的效果
 """
 import pandas as pd
@@ -221,12 +221,6 @@ class CompareTwoModel(object):
         # print(round(max_dist, 5))
         # return round(max_dist, 5), ks_thred, cut_list, tpr_list, fpr_list
 
-
-    # def cal_confusion_matrix(self):
-    #     C_old = confusion_matrix(self.df["label"], self.df[self.old_score_name])
-    #     C_new = confusion_matrix(self.df["label"], self.df[self.new_score_name])
-
-
 if __name__ == '__main__':
     # 比较新老模型在同一批用户上的打分情况，构造偏移矩阵
     # V1
@@ -235,7 +229,7 @@ if __name__ == '__main__':
     df = pd.read_csv(path + r"\score.csv")
     print("df.shape", df.shape)
     # 新老模型分，以及各自对应的分层区间。注意老模型分必须叫做“old_score”!!
-    df = df.rename(columns={"score1": "old_score"})
+    df = df.rename(columns={"aka_y_zx_score_v2": "old_score"})
     score_info_dict = {"old_score": [0, 465, 486, 505, 535, 560, 999],
                        "v1_score_new_553": [0, 465, 486, 505, 535, 560, 999],
                        "v1_score_new_20%": [0, 465, 486, 505, 535, 560, 999],
