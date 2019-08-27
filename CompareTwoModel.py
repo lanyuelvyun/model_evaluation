@@ -1,7 +1,7 @@
 # -*- coding:utf-8 -*-
 """
-@author: lanyue
-@time: 2019/08/09 16:25
+@author: lisiqi
+@time: 2019/7/19 11:30
 @目的：比较新老模型分的效果
 """
 import pandas as pd
@@ -46,19 +46,16 @@ class CompareTwoModel(object):
         df_bad = self.df[self.df["label"] == 1]
         print("df_good.shape: ", df_good.shape, "df_bad.shape:", df_bad.shape)
         plt.figure(figsize=(20, 12))
-        color_list = ["blue", "red", "yellow", "green", "orange", "black"]
-        j = 0
-        for score_name in self.score_info_dict.keys():
-            plt.subplot(241 + j)
-            sns.kdeplot(df_good[score_name], label='%s,label=0' % score_name, color=color_list[j], linestyle='-', shade=True)
-            sns.kdeplot(df_bad[score_name], label='%s,label=1' % score_name, color=color_list[j], linestyle='--', shade=True)
+        for i, score_name, c in zip(range(0, len(self.score_info_dict)), self.score_info_dict.keys(), 'rgbyo'):
+            plt.subplot(2, 2, 1+i)
+            sns.kdeplot(df_good[score_name], label='%s,label=0' % score_name, color=c, linestyle='-', shade=True)
+            sns.kdeplot(df_bad[score_name], label='%s,label=1' % score_name, color=c, linestyle='--', shade=True)
             # plt.xticks(x_list, color='black', rotation=60)  # 横坐标旋转60度
             plt.title('score_distribution')
             plt.xlabel("score")
             plt.ylabel("frequency")
             plt.legend()        # 用来显示图例
             plt.tight_layout()  # 调整每个子图之间的距离
-            j += 1
         plt.savefig(self.save_path + r"\score_distribution.jpg")
         plt.close()
 
@@ -66,15 +63,13 @@ class CompareTwoModel(object):
         print("同一批样本的情况下：画新老模型分差值(new-old)频数占比图".center(80, '-'))
         df_copy = self.df.copy()
         plt.figure(figsize=(20, 12))
-        j = 0
-        for score_name in self.score_info_dict.keys():
+        for i, score_name in enumerate(self.score_info_dict.keys()):
             if score_name not in (["old_score"]):
                 df_copy["diff_score"] = df_copy[score_name] - df_copy["old_score"]
                 df_copy["diff_score_bins"] = pd.cut(df_copy["diff_score"], bins=10, right=False, include_lowest=True)
                 df_result = df_copy.groupby("diff_score_bins").apply(lambda x: x.shape[0] * 1.0 / self.df.shape[0])
                 # plot
-                plt.subplot(241 + j)
-                j += 1
+                plt.subplot(2, 2, 1+i)
                 x_list = [str(i) for i in df_result.index]
                 y_list = (list(df_result.values))
                 plt.tick_params(labelsize=8)  # tick_params可设置坐标轴刻度值属性
@@ -146,17 +141,16 @@ class CompareTwoModel(object):
         plt.close()
 
     def cal_ks(self):
-        print("calc ks and plot ks_cusrve".center(60, '-'))
+        print("calc ks and plot ks_curve".center(60, '-'))
         df_copy = self.df.copy()
         plt.figure(figsize=(10, 8))
         plt.tick_params(labelsize=8)  # tick_params可设置坐标轴刻度值属性
-        color_list = ["blue", "red", "yellow", "green", "orange", "black"]
-        for i, score_name in enumerate(self.score_info_dict.keys()):
+        for i, score_name, c in zip(range(0, len(self.score_info_dict)), self.score_info_dict.keys(), "rgbyo"):
             ks, ks_cut_pvalue, cut_list, tpr_list, fpr_list = self._calc_ks(df_copy[score_name], df_copy["label"])
             # plot
-            plt.plot(cut_list, tpr_list, label='tpr_%s,ks = %s' % (score_name, ks), color=color_list[i], linestyle='-')
-            plt.plot(cut_list, fpr_list, label='fpr_%s' % score_name, color=color_list[i], linestyle='-')
-            plt.plot([ks_cut_pvalue, ks_cut_pvalue], [0, 1], label='ks_cut_pvalue_%s' % score_name, color=color_list[i], linestyle='--')
+            plt.plot(cut_list, tpr_list, label='tpr_%s,ks = %s' % (score_name, ks), color=c, linestyle='-')
+            plt.plot(cut_list, fpr_list, label='fpr_%s' % score_name, color=c, linestyle='-')
+            plt.vlines(ks_cut_pvalue, 0, 1, label='ks_cut_pvalue_%s' % score_name, color=c, linestyle='--')  # 竖线
         plt.plot([400, 600], [0, 1], color='black', linestyle='--')
         # plt.xticks(x_list, color='black', rotation=60)  # 横坐标旋转60度
         plt.title('ks_curve')
@@ -166,6 +160,7 @@ class CompareTwoModel(object):
         path = os.path.join(self.save_path, 'ks_curve.png')
         plt.savefig(path)
         plt.close()
+        # return ks_old, ks_new
 
     @staticmethod
     def _calc_ks(p_list, label_list):
@@ -175,9 +170,9 @@ class CompareTwoModel(object):
         label的定义：与模型训练时候一致，坏用户label=1, 好用户label=0
         """
         print("按照pvalue从小到大排序，该排序方式计算的KS适用于：模型分数pvalue范围是[300, 700]，分数越低，用户越坏(label=1)，预测的时候,<=pvalue的样本，被预测成label=1")
-        df_result = pd.DataFrame({"pvalue": p_list, "label": label_list}).sort_values(by="pvalue", ascending=True).reset_index()  
+        df_result = pd.DataFrame({"pvalue": p_list, "label": label_list}).sort_values(by="pvalue", ascending=True).reset_index()
         # print("按照pvalue从大到小排序，该排序方式计算的KS适用于：模型分数pvalue范围是[0,1]，分数越高，用户越坏(label=1)，预测的时候,>=pvalue的样本，被预测成label=1")
-        # df_result = pd.DataFrame({"pvalue": p_list, "label": label_list}).sort_values(by="pvalue", ascending=False).reset_index()  
+        # df_result = pd.DataFrame({"pvalue": p_list, "label": label_list}).sort_values(by="pvalue", ascending=False).reset_index()
         df_result["label_cumsum"] = df_result["label"].cumsum(axis=0)
         df_result["label_cumsum_cnt"] = np.arange(1, df_result.shape[0]+1)
         total_p = df_result["label"].sum()
@@ -189,79 +184,70 @@ class CompareTwoModel(object):
         print("ks= %s, ks_cut_pvalue = %s" % (round(ks, 3), ks_cut_pvalue))
         return round(ks, 3), ks_cut_pvalue, df_result["pvalue"], df_result["tpr"], df_result["fpr"]
         # 这个计算tpr和fpr方法有一个缺点，KS曲线是以df_result["pvalue"]为横轴的来画的，但是df_result["pvalue"]的值有重复，所以画出来的ＫＳ曲线不平滑
-        
-#         方法二
-#         print("计算ks，以下计算KS的逻辑适用于：模型分数范围是[300, 700]，分数越高，用户越好(label=0)")
-#         tuple_list = list(zip(p_list, label_list))
-#         unique_value = sorted(np.unique(p_list))
-#         cut_list = np.arange(300, 700, 1)
-#         if len(unique_value) < len(cut_list):
-#             cut_list = unique_value
-#         ks_thred = 0
-#         max_dist = 0
-#         init_value = 0.00001
-#         tpr_list = []
-#         fpr_list = []
-#         for cut in cut_list:
-#             tp = init_value
-#             fn = init_value
-#             fp = init_value
-#             tn = init_value
-#             for score, label in tuple_list:
-#                 if score <= cut and label == 1:
-#                     tp += 1
-#                 elif score <= cut and label == 0:
-#                     fp += 1
-#                 elif score > cut and label == 1:
-#                     fn += 1
-#                 elif score > cut and label == 0:
-#                     tn += 1
-#             tpr = round(1.0 * tp / (tp + fn), 3)
-#             fpr = round(1.0 * fp / (fp + tn), 3)
-#             dist = tpr - fpr
-#             if dist > max_dist:
-#                 max_dist = dist  # max(tpr-fpr)，就是KS
-#                 ks_thred = cut  # 取到max(tpr-fpr)时候的阈值p
-#             tpr_list.append(tpr)
-#             fpr_list.append(fpr)
-#         return round(max_dist, 5), ks_thred, cut_list, tpr_list, fpr_list
+
+        # print("计算ks，以下计算KS的逻辑适用于：模型分数范围是[300, 700]，分数越高，用户越好(label=0)")
+        # tuple_list = list(zip(p_list, label_list))
+        # unique_value = sorted(np.unique(p_list))
+        # cut_list = np.arange(300, 700, 1)
+        # if len(unique_value) < len(cut_list):
+        #     cut_list = unique_value
+        # ks_thred = 0
+        # max_dist = 0
+        # init_value = 0.00001
+        # tpr_list = []
+        # fpr_list = []
+        # for cut in cut_list:
+        #     tp = init_value
+        #     fn = init_value
+        #     fp = init_value
+        #     tn = init_value
+        #     for score, label in tuple_list:
+        #         if score <= cut and label == 1:
+        #             tp += 1
+        #         elif score <= cut and label == 0:
+        #             fp += 1
+        #         elif score > cut and label == 1:
+        #             fn += 1
+        #         elif score > cut and label == 0:
+        #             tn += 1
+        #     tpr = round(1.0 * tp / (tp + fn), 3)
+        #     fpr = round(1.0 * fp / (fp + tn), 3)
+        #     dist = tpr - fpr
+        #     if dist > max_dist:
+        #         max_dist = dist  # max(tpr-fpr)，就是KS
+        #         ks_thred = cut  # 取到max(tpr-fpr)时候的阈值p
+        #     tpr_list.append(tpr)
+        #     fpr_list.append(fpr)
+        # print(round(max_dist, 5))
+        # return round(max_dist, 5), ks_thred, cut_list, tpr_list, fpr_list
+
+
+    # def cal_confusion_matrix(self):
+    #     C_old = confusion_matrix(self.df["label"], self.df[self.old_score_name])
+    #     C_new = confusion_matrix(self.df["label"], self.df[self.new_score_name])
+
 
 if __name__ == '__main__':
     # 比较新老模型在同一批用户上的打分情况，构造偏移矩阵
     # V1
-    # path = r"C:\Users\V-DZ-00255\Downloads"
-    # save_path = path
-    # df = pd.read_csv(path + r"\v1_score_filled&old.csv")
-    # df = df.drop_duplicates(subset="loan_id", keep="first")  # 去重loan_id
-    # df['label'] = df["max_overdue"].apply(lambda x: 1 if x > 7 else 0)
-    # print("df.shape", df.shape)
-    # # 新老模型分，以及各自对应的分层区间。注意老模型分必须叫做“old_score”!!
-    # df = df.rename(columns={"aka_y_zx_score_v1": "old_score"})
-    # score_info_dict = {"old_score": [0, 465, 486, 505, 535, 560, 999],
-    #                    "v1_score_new_20%": [0, 465, 486, 505, 535, 560, 999],
-    #                    "v1_score_new_40%": [0, 465, 486, 505, 535, 560, 999],
-    #                    "v1_score_new_50%": [0, 465, 486, 505, 535, 560, 999],
-    #                    "v1_score_new_60%": [0, 465, 486, 505, 535, 560, 999]}
-
-    # V2
-    path = r"C:\Users\V-DZ-00255\Downloads"
+    path = r"Downloads"
     save_path = path
-    df = pd.read_csv(path + r"\v2_score_filled&old.csv")
-    df = df.drop_duplicates(subset="loan_id", keep="first")  # 去重loan_id
-    df['label'] = df["max_overdue"].apply(lambda x: 1 if x > 7 else 0)
-    print(df.shape)
-    # 新老模型分，以及各自对应的分层区间。注意老模型分必须叫做“old_score”!!！
-    df = df.rename(columns={"aka_y_zx_score_v2": "old_score"})
-    score_info_dict = {"old_score": [0, 439, 459, 479, 499, 520, 999],
-                       "v2_score_new_20%": [0, 439, 459, 479, 499, 520, 999],
-                       "v2_score_new_40%": [0, 439, 459, 479, 499, 520, 999],
-                       "v2_score_new_50%": [0, 439, 459, 479, 499, 520, 999],
-                       "v2_score_new_60%": [0, 439, 459, 479, 499, 520, 999]}
+    df = pd.read_csv(path + r"\score.csv")
+    print("df.shape", df.shape)
+    # 新老模型分，以及各自对应的分层区间。注意老模型分必须叫做“old_score”!!
+    df = df.rename(columns={"score1": "old_score"})
+    score_info_dict = {"old_score": [0, 465, 486, 505, 535, 560, 999],
+                       "v1_score_new_553": [0, 465, 486, 505, 535, 560, 999],
+                       "v1_score_new_20%": [0, 465, 486, 505, 535, 560, 999],
+                       "v1_score_new_40%": [0, 465, 486, 505, 535, 560, 999],
+                       "v1_score_new_50%": [0, 465, 486, 505, 535, 560, 999],
+                       "v1_score_new_60%": [0, 465, 486, 505, 535, 560, 999]}
+
 
     # compare model
     compare_two_model = CompareTwoModel(df=df, score_info_dict=score_info_dict, save_path=save_path)
-    compare_two_model.cal_offset_matrix()
-    compare_two_model.cal_ks()
-    compare_two_model.cal_auc()
-    compare_two_model.cal_diffscore()
+    # compare_two_model.cal_offset_matrix()
+    # compare_two_model.cal_ks()
+    # compare_two_model.cal_auc()
+    # compare_two_model.cal_diffscore()
     compare_two_model.plot_score_distribution()
