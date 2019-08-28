@@ -151,9 +151,9 @@ class BinsAnalysis(object):
 
 if __name__ == "__main__":
     path = r"C:\Users\Downloads"
-    df = pd.read_csv(path + r"\quyong_zxdae_dt0716.csv", na_values=[-1, -2, -3, -99])
-    save_path = path + r"\quyong_zxdae_dt0716_result.csv"
-    split_col = 'aka_qy_y_zx_score'  # 模型分，用于分层
+    df = pd.read_csv(path + r"\data.csv", na_values=[-1, -2, -3, -99])
+    save_path = path + r"\data_result.csv"
+    split_col = 'score'  # 模型分，用于分层
     print(df[split_col].min(), df[split_col].max())
     split_value_list = [0, 455, 470, 490, 505, 520, 540, 999]  # 自定义的分层区间，按照这个区间进行分层。注意：左闭右开
 
